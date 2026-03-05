@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Podcast Chat</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="header-left">
+      <span class="logo">&#127897;</span>
+      <div>
+        <h1>Podcast Chat</h1>
+        <p>Search episodes &rarr; build a knowledge base &rarr; chat</p>
+      </div>
+    </div>
+    <div id="apiStatus" class="api-status"></div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ── LEFT: Search ──────────────────────────────── -->
+    <section class="panel" id="searchPanel">
+      <div class="panel-header">
+        <h2>Search Episodes</h2>
+      </div>
+
+      <div class="search-bar">
+        <input
+          id="searchInput"
+          type="text"
+          placeholder="Search podcasts &amp; episodes..."
+          autocomplete="off"
+        />
+        <button id="searchBtn" class="btn-primary">Search</button>
+      </div>
+
+      <div id="searchResults" class="scroll-area">
+        <div class="empty-state">
+          <span class="empty-icon">&#128270;</span>
+          <p>Search for podcast episodes above</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── MIDDLE: Knowledge Base ────────────────────── -->
+    <section class="panel" id="kbPanel">
+      <div class="panel-header">
+        <h2>Knowledge Base</h2>
+        <span id="kbBadge" class="badge">0</span>
+      </div>
+
+      <div id="kbList" class="scroll-area">
+        <div class="empty-state">
+          <span class="empty-icon">&#128218;</span>
+          <p>Add episodes from the search results</p>
+        </div>
+      </div>
+
+      <div id="kbFooter" class="kb-footer hidden">
+        <button id="clearKbBtn" class="btn-ghost btn-sm">Clear all</button>
+      </div>
+    </section>
+
+    <!-- ── RIGHT: Chat ───────────────────────────────── -->
+    <section class="panel chat-panel" id="chatPanel">
+      <div class="panel-header">
+        <h2>Chat</h2>
+        <button id="clearChatBtn" class="btn-ghost btn-sm">Clear</button>
+      </div>
+
+      <div id="chatMessages" class="chat-messages scroll-area">
+        <div class="message assistant-message">
+          <div class="message-content">
+            Add podcast episodes to your knowledge base on the left, then ask me anything about them.
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-row">
+        <textarea
+          id="chatInput"
+          rows="1"
+          placeholder="Ask a question about the episodes..."
+        ></textarea>
+        <button id="sendBtn" class="btn-primary send-btn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
