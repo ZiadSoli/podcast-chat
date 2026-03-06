@@ -1,9 +1,8 @@
 require('dotenv').config();
-const express    = require('express');
-const session    = require('express-session');
-const crypto     = require('crypto');
-const nodemailer = require('nodemailer');
-const axios      = require('axios');
+const express = require('express');
+const session = require('express-session');
+const crypto  = require('crypto');
+const axios   = require('axios');
 const FormData   = require('form-data');
 const path       = require('path');
 const fs         = require('fs');
@@ -180,40 +179,40 @@ app.use(session({
   },
 }));
 
-// ── Email ─────────────────────────────────────────────────────────────────────
-const mailer = RESEND_API_KEY
-  ? nodemailer.createTransport({
-      host: 'smtp.resend.com',
-      port: 465,
-      secure: true,
-      auth: { user: 'resend', pass: RESEND_API_KEY },
-    })
-  : null;
-
+// ── Email (Resend HTTP API) ───────────────────────────────────────────────────
 async function sendMagicLinkEmail(email, token) {
   const link = `${BASE_URL}/auth/verify?token=${token}`;
 
-  if (!mailer) {
+  if (!RESEND_API_KEY) {
     // Dev mode: print to console instead of sending
     console.log(`\n  ── Magic link for ${email} ──`);
     console.log(`  ${link}\n`);
     return;
   }
 
-  await mailer.sendMail({
-    from: EMAIL_FROM,
-    to: email,
-    subject: 'Your sign-in link for Podcast Chat',
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
-        <h2 style="margin:0 0 8px;font-size:20px">Sign in to Podcast Chat</h2>
-        <p style="color:#555;margin:0 0 24px">Click the button below to sign in. This link expires in 15 minutes and can only be used once.</p>
-        <a href="${link}" style="display:inline-block;background:#18181b;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500">Sign in</a>
-        <p style="color:#888;font-size:13px;margin:24px 0 0">If you didn't request this, you can safely ignore it.</p>
-      </div>
-    `,
-    text: `Sign in to Podcast Chat: ${link}\n\nThis link expires in 15 minutes.`,
-  });
+  await axios.post(
+    'https://api.resend.com/emails',
+    {
+      from: EMAIL_FROM,
+      to: [email],
+      subject: 'Your sign-in link for Podcast Chat',
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
+          <h2 style="margin:0 0 8px;font-size:20px">Sign in to Podcast Chat</h2>
+          <p style="color:#555;margin:0 0 24px">Click the button below to sign in. This link expires in 15 minutes and can only be used once.</p>
+          <a href="${link}" style="display:inline-block;background:#18181b;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500">Sign in</a>
+          <p style="color:#888;font-size:13px;margin:24px 0 0">If you didn't request this, you can safely ignore it.</p>
+        </div>
+      `,
+      text: `Sign in to Podcast Chat: ${link}\n\nThis link expires in 15 minutes.`,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
 }
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
