@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const path    = require('path');
 
@@ -22,9 +22,9 @@ app.use('/api', chatRoutes);
 
 app.listen(PORT, () => {
   console.log(`\nPodcast Chat running at http://localhost:${PORT}`);
-  console.log(`  ListenNotes: ${process.env.LISTENNOTES_API_KEY ? 'set' : 'MISSING'}`);
-  console.log(`  Anthropic:   ${process.env.ANTHROPIC_API_KEY   ? 'set' : 'MISSING'}`);
-  console.log(`  OpenAI:      ${process.env.OPENAI_API_KEY       ? 'set' : 'MISSING'}`);
-  console.log(`  Email:       ${process.env.RESEND_API_KEY        ? 'Resend configured' : 'DEV MODE (links logged to console)'}`);
-  console.log(`  Base URL:    ${process.env.BASE_URL || `http://localhost:${PORT}`}\n`);
+  console.log(`  PodcastIndex: ${process.env.PODCASTINDEX_API_KEY ? 'set' : 'MISSING'}`);
+  console.log(`  Anthropic:    ${process.env.ANTHROPIC_API_KEY    ? 'set' : 'MISSING'}`);
+  console.log(`  OpenAI:       ${process.env.OPENAI_API_KEY        ? 'set' : 'MISSING'}`);
+  console.log(`  Email:        ${process.env.RESEND_API_KEY         ? 'Resend configured' : 'DEV MODE (links logged to console)'}`);
+  console.log(`  Base URL:     ${process.env.BASE_URL || `http://localhost:${PORT}`}\n`);
 });

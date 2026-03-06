@@ -3,6 +3,7 @@ const { EventEmitter } = require('events');
 const axios         = require('axios');
 const FormData      = require('form-data');
 const { db, putCached } = require('../db/index');
+const { getEpisodeById } = require('./podcastindex');
 
 const AUDIO_LIMIT = 24.5 * 1024 * 1024;
 
@@ -60,18 +61,18 @@ async function transcribeEpisode(episodeId, jobId) {
     stmtUpdateStatus.run('fetching', Date.now(), jobId);
     jobEmitter.emit(jobId, { status: 'fetching' });
 
-    const { data: episode } = await axios.get(
-      `https://listen-api.listennotes.com/api/v2/episodes/${episodeId}`,
-      { headers: { 'X-ListenAPI-Key': process.env.LISTENNOTES_API_KEY } }
-    );
-
-    if (!episode.audio) {
+    // Step 1: fetch episode metadata (need feedId before we can fetch the feed)
+    const epData = await getEpisodeById(episodeId);
+    const ep = epData.episode;
+    if (!ep?.enclosureUrl) {
       throw new Error('No audio URL found for this episode. The podcast may not expose a direct MP3 link.');
     }
 
+    // Step 2: download audio — feedTitle and feedImage are already on the episode
+    // object so no second API call is needed
     stmtUpdateStatus.run('downloading', Date.now(), jobId);
     jobEmitter.emit(jobId, { status: 'downloading' });
-    const audioBuffer = await downloadAudio(episode.audio);
+    const audioBuffer = await downloadAudio(ep.enclosureUrl);
 
     stmtUpdateStatus.run('transcribing', Date.now(), jobId);
     jobEmitter.emit(jobId, { status: 'transcribing' });
@@ -107,9 +108,9 @@ async function transcribeEpisode(episodeId, jobId) {
 
     putCached(episodeId, {
       transcript,
-      title:     episode.title,
-      podcast:   episode.podcast?.title || null,
-      thumbnail: episode.thumbnail || episode.podcast?.thumbnail || null,
+      title:     ep.title,
+      podcast:   ep.feedTitle || null,
+      thumbnail: ep.image || ep.feedImage || null,
     });
 
   } catch (err) {

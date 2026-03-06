@@ -6,8 +6,9 @@ const { createJob, getJob, setJobDone, enqueueTranscription, jobEmitter } = requ
 const router = express.Router();
 
 router.post('/transcribe/:episodeId', requireAuth, (req, res) => {
-  if (!process.env.OPENAI_API_KEY)      return res.status(500).json({ error: 'OPENAI_API_KEY is not configured.' });
-  if (!process.env.LISTENNOTES_API_KEY) return res.status(500).json({ error: 'LISTENNOTES_API_KEY is not configured.' });
+  if (!process.env.OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY is not configured.' });
+  if (!process.env.PODCASTINDEX_API_KEY || !process.env.PODCASTINDEX_API_SECRET)
+    return res.status(500).json({ error: 'PODCASTINDEX_API_KEY / PODCASTINDEX_API_SECRET not configured.' });
 
   const { episodeId } = req.params;
   const jobId = createJob(episodeId);
