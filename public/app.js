@@ -536,7 +536,7 @@ clearChatBtn.addEventListener('click', () => {
 });
 
 /* ── Mobile tab navigation ─────────────────────────────────────── */
-const isMobile = () => window.innerWidth <= 768;
+const isMobile = () => window.innerWidth <= 900;
 
 function switchTab(panelId) {
   if (!isMobile()) return;

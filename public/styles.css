@@ -623,7 +623,7 @@ html, body {
 .mobile-tabs { display: none; }
 
 /* ── Responsive: mobile ───────────────────────────────────────── */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   :root {
     --header-h: 52px;
     --tab-bar-h: 60px;
@@ -638,7 +638,8 @@ html, body {
   /* Single-column layout, minus tab bar */
   .layout {
     grid-template-columns: 1fr;
-    height: calc(100dvh - var(--header-h) - var(--tab-bar-h));
+    height: calc(100vh - var(--header-h) - var(--tab-bar-h));
+    height: calc(100dvh - var(--header-h) - var(--tab-bar-h) - env(safe-area-inset-bottom, 0px));
   }
 
   /* Hide all panels; JS shows the active one */
