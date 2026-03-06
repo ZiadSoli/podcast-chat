@@ -29,6 +29,8 @@ const chatInput       = $('chatInput');
 const sendBtn         = $('sendBtn');
 const clearChatBtn    = $('clearChatBtn');
 const clearKbBtn      = $('clearKbBtn');
+const userEmailEl     = $('userEmail');
+const logoutBtn       = $('logoutBtn');
 
 /* ── Utils ─────────────────────────────────────────────────────── */
 function fmtDuration(sec) {
@@ -55,6 +57,29 @@ function scrollBottom(el) {
   requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
 }
 
+/* ── Auth ──────────────────────────────────────────────────────── */
+async function initAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.status === 401) { location.href = '/login.html'; return false; }
+    const { email } = await res.json();
+    if (userEmailEl) userEmailEl.textContent = email;
+    return true;
+  } catch {
+    return true; // network error — let the app load and fail on next real request
+  }
+}
+
+function redirectIfUnauth(res) {
+  if (res.status === 401) { location.href = '/login.html'; return true; }
+  return false;
+}
+
+logoutBtn?.addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.href = '/login.html';
+});
+
 /* ── API health check ──────────────────────────────────────────── */
 async function checkHealth() {
   try {
@@ -79,10 +104,11 @@ async function doSearch() {
   state.searching = true;
   searchBtn.disabled = true;
   searchBtn.textContent = 'Searching…';
-  searchResultsEl.innerHTML = `<div class="empty-state"><span class="spinner"></span><p>Searching…</p></div>`;
+  searchResultsEl.innerHTML = `<div class="empty-state"><span class="spinner"></span><p style="color:var(--text-secondary);font-size:13px">Searching…</p></div>`;
 
   try {
     const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=podcast`);
+    if (redirectIfUnauth(res)) return;
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     state.podcastResults = data.results || [];
@@ -110,6 +136,7 @@ async function openPodcast(id) {
 
   try {
     const res = await fetch(`/api/podcast/${encodeURIComponent(id)}/episodes`);
+    if (redirectIfUnauth(res)) return;
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
@@ -175,7 +202,7 @@ function renderSearchResults() {
 
 function renderPodcastResults() {
   if (state.podcastResults.length === 0) {
-    searchResultsEl.innerHTML = `<div class="empty-state"><span class="empty-icon">&#127897;</span><p>Search for a podcast above</p></div>`;
+    searchResultsEl.innerHTML = `<div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>Search for a podcast above</p></div>`;
     return;
   }
 
@@ -215,14 +242,14 @@ function renderEpisodeResults() {
   `;
 
   if (state.loadingEpisodes && state.episodeResults.length === 0) {
-    html += `<div class="empty-state"><span class="spinner"></span><p>Loading episodes…</p></div>`;
+    html += `<div class="empty-state"><span class="spinner"></span><p style="color:var(--text-secondary);font-size:13px">Loading episodes…</p></div>`;
     searchResultsEl.innerHTML = html;
     document.getElementById('backBtn')?.addEventListener('click', backToPodcasts);
     return;
   }
 
   if (state.episodeResults.length === 0) {
-    html += `<div class="empty-state"><span class="empty-icon">&#128214;</span><p>No episodes found</p></div>`;
+    html += `<div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>No episodes found</p></div>`;
     searchResultsEl.innerHTML = html;
     document.getElementById('backBtn')?.addEventListener('click', backToPodcasts);
     return;
@@ -291,6 +318,7 @@ async function addEpisode(id) {
 
   try {
     const res = await fetch(`/api/transcribe/${encodeURIComponent(id)}`, { method: 'POST' });
+    if (redirectIfUnauth(res)) return;
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     // If cached, poll almost immediately — transcript is already ready
@@ -380,7 +408,7 @@ function renderKb() {
   }
 
   if (state.episodes.length === 0) {
-    kbList.innerHTML = `<div class="empty-state"><span class="empty-icon">&#128218;</span><p>Add episodes from search results</p></div>`;
+    kbList.innerHTML = `<div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><p>Add episodes from search results</p></div>`;
     return;
   }
 
@@ -424,7 +452,7 @@ function renderChat() {
   if (state.chatHistory.length === 0) {
     chatMessages.innerHTML = `
       <div class="message assistant-message">
-        <div class="message-content">Add podcast episodes to your knowledge base on the left, then ask me anything about them.</div>
+        <div class="message-content">Add podcast episodes to your knowledge base, then ask me anything about them.</div>
       </div>`;
     return;
   }
@@ -472,6 +500,7 @@ async function sendMessage() {
       }),
     });
 
+    if (redirectIfUnauth(res)) { bubble.remove(); return; }
     const data = await res.json();
     bubble.remove();
 
@@ -571,9 +600,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 window.addEventListener('resize', initLayout);
 
 /* ── Init ──────────────────────────────────────────────────────── */
-checkHealth();
-renderKb();
-renderChat();
-renderSearchResults();
-updateSendBtn();
-initLayout();
+(async () => {
+  const authed = await initAuth();
+  if (!authed) return;
+  checkHealth();
+  renderKb();
+  renderChat();
+  renderSearchResults();
+  updateSendBtn();
+  initLayout();
+})();
