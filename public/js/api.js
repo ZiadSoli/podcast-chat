@@ -38,3 +38,17 @@ export async function sendChatMessage(messages, episodes) {
 export async function checkHealth() {
   return fetch('/api/health');
 }
+
+// ── Collections ───────────────────────────────────────────────────────────────
+const json = data => ({
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(data),
+});
+
+export const getCollections          = ()          => fetch('/api/collections');
+export const createCollection        = data        => fetch('/api/collections',                       { method: 'POST',   ...json(data) });
+export const getCollection           = id          => fetch(`/api/collections/${id}`);
+export const updateCollection        = (id, data)  => fetch(`/api/collections/${id}`,                { method: 'PUT',    ...json(data) });
+export const deleteCollection        = id          => fetch(`/api/collections/${id}`,                { method: 'DELETE' });
+export const addFeedToCollection     = (id, feed)  => fetch(`/api/collections/${id}/feeds`,          { method: 'POST',   ...json(feed) });
+export const removeFeedFromCollection = (id, fid)  => fetch(`/api/collections/${id}/feeds/${fid}`,   { method: 'DELETE' });

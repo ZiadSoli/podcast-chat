@@ -44,6 +44,30 @@ db.exec(`
     error      TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS collections (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id              INTEGER NOT NULL,
+    name                 TEXT NOT NULL,
+    description          TEXT,
+    frequency            TEXT NOT NULL DEFAULT 'weekly',
+    day_of_week          INTEGER,
+    no_episodes_behavior TEXT NOT NULL DEFAULT 'suppress',
+    last_sent_at         INTEGER,
+    created_at           INTEGER NOT NULL,
+    updated_at           INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS collection_feeds (
+    collection_id INTEGER NOT NULL,
+    feed_id       TEXT NOT NULL,
+    feed_title    TEXT,
+    feed_thumbnail TEXT,
+    added_at      INTEGER NOT NULL,
+    PRIMARY KEY (collection_id, feed_id),
+    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE
   )
 `);
 

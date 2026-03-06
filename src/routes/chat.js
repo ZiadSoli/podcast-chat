@@ -39,7 +39,7 @@ router.post('/chat', requireAuth, async (req, res) => {
 router.get('/health', requireAuth, (req, res) => {
   res.json({
     status:      'ok',
-    listennotes: !!process.env.LISTENNOTES_API_KEY,
+    podcastindex: !!(process.env.PODCASTINDEX_API_KEY && process.env.PODCASTINDEX_API_SECRET),
     anthropic:   !!process.env.ANTHROPIC_API_KEY,
     openai:      !!process.env.OPENAI_API_KEY,
     cachedEpisodes: stmtCount.get().n,

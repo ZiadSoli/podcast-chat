@@ -3,10 +3,12 @@ const express = require('express');
 const path    = require('path');
 
 const { sessionMiddleware } = require('./src/middleware/auth');
-const authRoutes      = require('./src/routes/auth');
-const searchRoutes    = require('./src/routes/search');
-const transcribeRoutes = require('./src/routes/transcribe');
-const chatRoutes      = require('./src/routes/chat');
+const authRoutes         = require('./src/routes/auth');
+const searchRoutes       = require('./src/routes/search');
+const transcribeRoutes   = require('./src/routes/transcribe');
+const chatRoutes         = require('./src/routes/chat');
+const collectionsRoutes  = require('./src/routes/collections');
+const { startScheduler } = require('./src/services/scheduler');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -19,8 +21,10 @@ app.use('/',    authRoutes);
 app.use('/api', searchRoutes);
 app.use('/api', transcribeRoutes);
 app.use('/api', chatRoutes);
+app.use('/api', collectionsRoutes);
 
 app.listen(PORT, () => {
+  startScheduler();
   console.log(`\nPodcast Chat running at http://localhost:${PORT}`);
   console.log(`  PodcastIndex: ${process.env.PODCASTINDEX_API_KEY ? 'set' : 'MISSING'}`);
   console.log(`  Anthropic:    ${process.env.ANTHROPIC_API_KEY    ? 'set' : 'MISSING'}`);

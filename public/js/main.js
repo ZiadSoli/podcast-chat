@@ -2,6 +2,7 @@ import { initAuth } from './components/auth.js';
 import { initSearch, renderSearchResults } from './components/search.js';
 import { initKnowledgeBase, addEpisode, renderKb } from './components/knowledge-base.js';
 import { initChat, renderChat, updateSendBtn } from './components/chat.js';
+import { initCollections, openCollections } from './components/collections.js';
 import { checkHealth } from './api.js';
 
 // ── Layout / mobile tabs ──────────────────────────────────────────
@@ -33,11 +34,11 @@ function initLayout() {
 async function initHealth() {
   try {
     const res = await checkHealth();
-    const { listennotes, anthropic, openai } = await res.json();
+    const { podcastindex, anthropic, openai } = await res.json();
     document.getElementById('apiStatus').innerHTML = `
-      <span class="${listennotes ? 'ok' : 'miss'}"><span class="dot"></span> ListenNotes</span>
-      <span class="${anthropic  ? 'ok' : 'miss'}"><span class="dot"></span> Anthropic</span>
-      <span class="${openai     ? 'ok' : 'miss'}"><span class="dot"></span> OpenAI</span>
+      <span class="${podcastindex ? 'ok' : 'miss'}"><span class="dot"></span> PodcastIndex</span>
+      <span class="${anthropic   ? 'ok' : 'miss'}"><span class="dot"></span> Anthropic</span>
+      <span class="${openai      ? 'ok' : 'miss'}"><span class="dot"></span> OpenAI</span>
     `;
   } catch (_) {}
 }
@@ -46,9 +47,16 @@ async function initHealth() {
 initSearch({ onAddEpisode: id => addEpisode(id) });
 initKnowledgeBase({ onEpisodeAdded: () => { if (isMobile()) switchTab('kbPanel'); } });
 initChat();
+initCollections();
 
-// Tab buttons
-document.querySelectorAll('.tab-btn').forEach(btn => {
+// Header Collections button
+document.getElementById('collectionsBtn').addEventListener('click', openCollections);
+
+// 4th mobile tab — opens overlay instead of switching panels
+document.getElementById('colMobileTab').addEventListener('click', openCollections);
+
+// Tab buttons (only panels, not the Collections tab which has no data-panel)
+document.querySelectorAll('.tab-btn[data-panel]').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.panel));
 });
 window.addEventListener('resize', initLayout);

@@ -41,4 +41,8 @@ module.exports = {
 
   getEpisodeById: (id) =>
     piGet('/episodes/byid', { id }),
+
+  // Returns episodes published after sinceSeconds (Unix timestamp, seconds)
+  getEpisodesSince: (feedId, sinceSeconds) =>
+    piGet('/episodes/byfeedid', { id: feedId, max: 50, since: sinceSeconds }),
 };

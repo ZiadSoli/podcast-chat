@@ -30,6 +30,11 @@
       <div id="apiStatus" class="api-status"></div>
       <div class="user-info">
         <span id="userEmail" class="user-email"></span>
+        <button id="collectionsBtn" class="btn-ghost">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;margin-right:5px">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>Collections
+        </button>
         <button id="logoutBtn" class="btn-logout">Sign out</button>
       </div>
     </div>
@@ -119,6 +124,86 @@
 
   </div>
 
+  <!-- ── Collections overlay ────────────────────────── -->
+  <div id="collectionsOverlay" class="collections-overlay hidden">
+
+    <!-- List view -->
+    <div id="colListView" class="col-view">
+      <div class="col-header">
+        <h2>Collections</h2>
+        <button id="colCloseBtn" class="btn-ghost btn-sm">✕ Close</button>
+      </div>
+      <div id="colList" class="col-scroll scroll-area"></div>
+      <div class="col-footer">
+        <button id="colNewBtn" class="btn-primary">+ New collection</button>
+      </div>
+    </div>
+
+    <!-- Form view -->
+    <div id="colFormView" class="col-view hidden">
+      <div class="col-header">
+        <button id="colBackBtn" class="btn-ghost btn-sm">← Back</button>
+        <h2 id="colFormTitle">New collection</h2>
+      </div>
+      <div class="col-scroll scroll-area">
+
+        <div class="col-form-group">
+          <label for="colNameInput">Name</label>
+          <input id="colNameInput" type="text" placeholder="e.g. Tech Podcasts" autocomplete="off" />
+        </div>
+
+        <div class="col-form-group">
+          <label for="colDescInput">Description <span class="col-optional">(optional)</span></label>
+          <input id="colDescInput" type="text" placeholder="What is this collection about?" autocomplete="off" />
+        </div>
+
+        <div class="col-form-group">
+          <label>Summary frequency</label>
+          <div class="col-radio-group">
+            <label class="col-radio"><input type="radio" name="colFreq" value="daily" /> Daily</label>
+            <label class="col-radio"><input type="radio" name="colFreq" value="weekly" checked /> Weekly</label>
+          </div>
+        </div>
+
+        <div class="col-form-group" id="colDowGroup">
+          <label for="colDowSelect">Day of week</label>
+          <select id="colDowSelect">
+            <option value="0">Sunday</option>
+            <option value="1" selected>Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </div>
+
+        <div class="col-form-group">
+          <label>When there are no new episodes</label>
+          <div class="col-radio-group">
+            <label class="col-radio"><input type="radio" name="colBehavior" value="suppress" checked /> Skip sending email</label>
+            <label class="col-radio"><input type="radio" name="colBehavior" value="notify" /> Send anyway</label>
+          </div>
+        </div>
+
+        <div class="col-form-group">
+          <div class="col-shows-header">Podcast shows</div>
+          <div class="col-search-row">
+            <input id="colSearchInput" type="text" placeholder="Search for a podcast to add…" autocomplete="off" />
+          </div>
+          <div id="colSearchResults" class="col-search-results"></div>
+          <div id="colFeedList" class="col-feed-list"></div>
+        </div>
+
+      </div>
+      <div class="col-footer">
+        <button id="colSaveBtn" class="btn-primary">Save</button>
+        <button id="colDeleteBtn" class="btn-ghost btn-sm col-delete-btn hidden">Delete collection</button>
+      </div>
+    </div>
+
+  </div>
+
   <!-- ── Mobile bottom tab bar ──────────────────────── -->
   <nav class="mobile-tabs" id="mobileTabs">
     <button class="tab-btn" data-panel="searchPanel">
@@ -141,6 +226,12 @@
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
       <span class="tab-label">Chat</span>
+    </button>
+    <button class="tab-btn" id="colMobileTab">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span class="tab-label">Collections</span>
     </button>
   </nav>
 
