@@ -1,10 +1,13 @@
 require('dotenv').config();
-const express  = require('express');
-const axios    = require('axios');
-const FormData = require('form-data');
-const path     = require('path');
-const fs       = require('fs');
-const Database = require('better-sqlite3');
+const express    = require('express');
+const session    = require('express-session');
+const crypto     = require('crypto');
+const nodemailer = require('nodemailer');
+const axios      = require('axios');
+const FormData   = require('form-data');
+const path       = require('path');
+const fs         = require('fs');
+const Database   = require('better-sqlite3');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -13,7 +16,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 const LISTENNOTES_API_KEY = process.env.LISTENNOTES_API_KEY;
 const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY      = process.env.OPENAI_API_KEY;
-const PORT = process.env.PORT || 3000;
+const PORT           = process.env.PORT || 3000;
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me';
+const BASE_URL       = process.env.BASE_URL || `http://localhost:${PORT}`;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_FROM     = process.env.EMAIL_FROM || 'noreply@example.com';
 
 const LISTENNOTES_BASE = 'https://listen-api.listennotes.com/api/v2';
 const listennotes = (endpoint, params = {}) =>
@@ -22,13 +29,12 @@ const listennotes = (endpoint, params = {}) =>
     params,
   });
 
-// ── SQLite transcript store ───────────────────────────────────────────────────
-// RAILWAY_VOLUME_MOUNT_PATH is set automatically when a Railway volume is attached
+// ── SQLite store ──────────────────────────────────────────────────────────────
 const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new Database(path.join(DATA_DIR, 'transcripts.db'));
-db.pragma('journal_mode = WAL');  // safer concurrent writes
+db.pragma('journal_mode = WAL');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS transcripts (
@@ -38,6 +44,24 @@ db.exec(`
     podcast     TEXT,
     thumbnail   TEXT,
     cached_at   INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      TEXT UNIQUE NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS magic_tokens (
+    token      TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid     TEXT PRIMARY KEY,
+    data    TEXT NOT NULL,
+    expires INTEGER NOT NULL
   )
 `);
 
@@ -65,7 +89,7 @@ if (fs.existsSync(LEGACY_CACHE)) {
   }
 }
 
-// Prepared statements
+// ── Prepared statements: transcripts ─────────────────────────────────────────
 const stmtGet    = db.prepare('SELECT * FROM transcripts WHERE episode_id = ?');
 const stmtUpsert = db.prepare(`
   INSERT INTO transcripts (episode_id, transcript, title, podcast, thumbnail, cached_at)
@@ -77,8 +101,8 @@ const stmtUpsert = db.prepare(`
     thumbnail  = excluded.thumbnail,
     cached_at  = excluded.cached_at
 `);
-const stmtHas    = db.prepare('SELECT 1 FROM transcripts WHERE episode_id = ?');
-const stmtCount  = db.prepare('SELECT COUNT(*) AS n FROM transcripts');
+const stmtHas   = db.prepare('SELECT 1 FROM transcripts WHERE episode_id = ?');
+const stmtCount = db.prepare('SELECT COUNT(*) AS n FROM transcripts');
 
 function getCached(episodeId)  { return stmtGet.get(episodeId) || null; }
 function hasCached(episodeId)  { return !!stmtHas.get(episodeId); }
@@ -91,28 +115,208 @@ function putCached(episodeId, { transcript, title, podcast, thumbnail }) {
 const count = stmtCount.get().n;
 console.log(`  Transcript store: ${count} episode(s) in SQLite DB`);
 
-// ── Transcription job store ──────────────────────────────────────────────────
+// ── Prepared statements: auth ─────────────────────────────────────────────────
+const stmtInsertUser      = db.prepare('INSERT OR IGNORE INTO users (email, created_at) VALUES (?, ?)');
+const stmtGetUserByEmail  = db.prepare('SELECT id, email FROM users WHERE email = ?');
+const stmtGetUserById     = db.prepare('SELECT id, email FROM users WHERE id = ?');
+const stmtInsertToken     = db.prepare('INSERT INTO magic_tokens (token, user_id, expires_at) VALUES (?, ?, ?)');
+const stmtGetToken        = db.prepare('SELECT * FROM magic_tokens WHERE token = ?');
+const stmtDeleteToken     = db.prepare('DELETE FROM magic_tokens WHERE token = ?');
+const stmtCleanTokens     = db.prepare('DELETE FROM magic_tokens WHERE expires_at < ?');
+
+// ── Prepared statements: sessions ────────────────────────────────────────────
+const stmtGetSession     = db.prepare('SELECT data, expires FROM sessions WHERE sid = ?');
+const stmtSetSession     = db.prepare('INSERT OR REPLACE INTO sessions (sid, data, expires) VALUES (?, ?, ?)');
+const stmtDestroySession = db.prepare('DELETE FROM sessions WHERE sid = ?');
+const stmtTouchSession   = db.prepare('UPDATE sessions SET expires = ? WHERE sid = ?');
+const stmtCleanSessions  = db.prepare('DELETE FROM sessions WHERE expires < ?');
+
+// ── Custom SQLite session store ───────────────────────────────────────────────
+class SQLiteStore extends session.Store {
+  constructor() {
+    super();
+    setInterval(() => stmtCleanSessions.run(Date.now()), 10 * 60 * 1000).unref();
+  }
+
+  get(sid, cb) {
+    const row = stmtGetSession.get(sid);
+    if (!row || row.expires < Date.now()) return cb(null, null);
+    try { cb(null, JSON.parse(row.data)); } catch { cb(null, null); }
+  }
+
+  set(sid, sess, cb) {
+    const expires = sess.cookie?.expires
+      ? new Date(sess.cookie.expires).getTime()
+      : Date.now() + 30 * 24 * 60 * 60 * 1000;
+    stmtSetSession.run(sid, JSON.stringify(sess), expires);
+    cb(null);
+  }
+
+  destroy(sid, cb) {
+    stmtDestroySession.run(sid);
+    cb(null);
+  }
+
+  touch(sid, sess, cb) {
+    const expires = sess.cookie?.expires
+      ? new Date(sess.cookie.expires).getTime()
+      : Date.now() + 30 * 24 * 60 * 60 * 1000;
+    stmtTouchSession.run(expires, sid);
+    cb(null);
+  }
+}
+
+// ── Session middleware ────────────────────────────────────────────────────────
+app.use(session({
+  store: new SQLiteStore(),
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  },
+}));
+
+// ── Email ─────────────────────────────────────────────────────────────────────
+const mailer = RESEND_API_KEY
+  ? nodemailer.createTransport({
+      host: 'smtp.resend.com',
+      port: 465,
+      secure: true,
+      auth: { user: 'resend', pass: RESEND_API_KEY },
+    })
+  : null;
+
+async function sendMagicLinkEmail(email, token) {
+  const link = `${BASE_URL}/auth/verify?token=${token}`;
+
+  if (!mailer) {
+    // Dev mode: print to console instead of sending
+    console.log(`\n  ── Magic link for ${email} ──`);
+    console.log(`  ${link}\n`);
+    return;
+  }
+
+  await mailer.sendMail({
+    from: EMAIL_FROM,
+    to: email,
+    subject: 'Your sign-in link for Podcast Chat',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
+        <h2 style="margin:0 0 8px;font-size:20px">Sign in to Podcast Chat</h2>
+        <p style="color:#555;margin:0 0 24px">Click the button below to sign in. This link expires in 15 minutes and can only be used once.</p>
+        <a href="${link}" style="display:inline-block;background:#18181b;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:500">Sign in</a>
+        <p style="color:#888;font-size:13px;margin:24px 0 0">If you didn't request this, you can safely ignore it.</p>
+      </div>
+    `,
+    text: `Sign in to Podcast Chat: ${link}\n\nThis link expires in 15 minutes.`,
+  });
+}
+
+// ── Auth middleware ───────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (req.session?.userId) return next();
+  res.status(401).json({ error: 'Not authenticated.' });
+}
+
+// ── Auth routes (no auth required) ───────────────────────────────────────────
+
+// Current user
+app.get('/api/auth/me', (req, res) => {
+  if (!req.session?.userId) return res.status(401).json({ error: 'Not authenticated.' });
+  res.json({ email: req.session.email });
+});
+
+// Request a magic link
+app.post('/api/auth/request', async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'A valid email address is required.' });
+  }
+
+  // Upsert user
+  stmtInsertUser.run(email, Date.now());
+  const user = stmtGetUserByEmail.get(email);
+
+  // Clean up expired tokens
+  stmtCleanTokens.run(Date.now());
+
+  // Generate one-time token (256 bits of entropy)
+  const token     = crypto.randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+  stmtInsertToken.run(token, user.id, expiresAt);
+
+  try {
+    await sendMagicLinkEmail(email, token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Email send error:', err.message);
+    res.status(500).json({ error: 'Failed to send email. Please try again.' });
+  }
+});
+
+// Verify magic link token — called when user clicks the email link
+app.get('/auth/verify', (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.redirect('/login.html?error=missing_token');
+
+  const row = stmtGetToken.get(token);
+  if (!row) return res.redirect('/login.html?error=invalid_token');
+
+  if (row.expires_at < Date.now()) {
+    stmtDeleteToken.run(token);
+    return res.redirect('/login.html?error=expired_token');
+  }
+
+  // Consume the token (one-time use)
+  stmtDeleteToken.run(token);
+
+  const user = stmtGetUserById.get(row.user_id);
+  if (!user) return res.redirect('/login.html?error=invalid_token');
+
+  // Regenerate session to prevent fixation attacks
+  req.session.regenerate(err => {
+    if (err) return res.redirect('/login.html?error=server_error');
+    req.session.userId = user.id;
+    req.session.email  = user.email;
+    req.session.save(err2 => {
+      if (err2) return res.redirect('/login.html?error=server_error');
+      res.redirect('/');
+    });
+  });
+});
+
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid');
+    res.json({ ok: true });
+  });
+});
+
+// ── Transcription job store ───────────────────────────────────────────────────
 const jobs = new Map();
 let jobSeq = 0;
 
 function createJob() {
   const id = `job_${++jobSeq}_${Date.now()}`;
   jobs.set(id, { status: 'pending', transcript: null, error: null, createdAt: Date.now() });
-  // Prune jobs older than 30 minutes
   for (const [jid, j] of jobs) {
     if (Date.now() - j.createdAt > 30 * 60 * 1000) jobs.delete(jid);
   }
   return id;
 }
 
-// ── Background transcription ─────────────────────────────────────────────────
-const AUDIO_LIMIT = 24.5 * 1024 * 1024; // 24.5 MB — Whisper max is 25 MB
+// ── Background transcription ──────────────────────────────────────────────────
+const AUDIO_LIMIT = 24.5 * 1024 * 1024;
 
 async function transcribeEpisode(episodeId, jobId) {
   const job = jobs.get(jobId);
 
   try {
-    // 1. Fetch episode metadata from ListenNotes
     job.status = 'fetching';
     const { data: episode } = await listennotes(`/episodes/${episodeId}`);
 
@@ -120,11 +324,9 @@ async function transcribeEpisode(episodeId, jobId) {
       throw new Error('No audio URL found for this episode. The podcast may not expose a direct MP3 link.');
     }
 
-    // 2. Stream audio, collect up to AUDIO_LIMIT bytes
     job.status = 'downloading';
     const audioBuffer = await downloadAudio(episode.audio);
 
-    // 3. Transcribe with Whisper
     job.status = 'transcribing';
     const form = new FormData();
     form.append('file', audioBuffer, {
@@ -156,7 +358,6 @@ async function transcribeEpisode(episodeId, jobId) {
     job.status     = 'done';
     job.transcript = transcript;
 
-    // ── Persist to SQLite so future sessions skip re-transcription ──
     putCached(episodeId, {
       transcript,
       title:     episode.title,
@@ -200,10 +401,9 @@ async function downloadAudio(url) {
   return Buffer.concat(chunks);
 }
 
-// ── Routes ───────────────────────────────────────────────────────────────────
+// ── Protected routes ──────────────────────────────────────────────────────────
 
-// Search podcasts or episodes
-app.get('/api/search', async (req, res) => {
+app.get('/api/search', requireAuth, async (req, res) => {
   const { q, offset = 0, type = 'podcast' } = req.query;
   if (!q) return res.status(400).json({ error: 'Query parameter "q" is required.' });
   if (!LISTENNOTES_API_KEY) return res.status(500).json({ error: 'LISTENNOTES_API_KEY is not configured.' });
@@ -216,8 +416,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Get episodes for a podcast
-app.get('/api/podcast/:id/episodes', async (req, res) => {
+app.get('/api/podcast/:id/episodes', requireAuth, async (req, res) => {
   const { id } = req.params;
   const { next_episode_pub_date } = req.query;
   if (!LISTENNOTES_API_KEY) return res.status(500).json({ error: 'LISTENNOTES_API_KEY is not configured.' });
@@ -241,7 +440,7 @@ app.get('/api/podcast/:id/episodes', async (req, res) => {
         thumbnail:        ep.thumbnail || data.thumbnail,
         pub_date_ms:      ep.pub_date_ms,
         audio_length_sec: ep.audio_length_sec,
-        cached:           hasCached(ep.id),             // ← tell the UI if already cached
+        cached:           hasCached(ep.id),
       })),
       next_episode_pub_date: data.next_episode_pub_date,
     });
@@ -250,15 +449,13 @@ app.get('/api/podcast/:id/episodes', async (req, res) => {
   }
 });
 
-// Start transcription job (or return cached transcript immediately)
-app.post('/api/transcribe/:episodeId', (req, res) => {
+app.post('/api/transcribe/:episodeId', requireAuth, (req, res) => {
   if (!OPENAI_API_KEY)      return res.status(500).json({ error: 'OPENAI_API_KEY is not configured.' });
   if (!LISTENNOTES_API_KEY) return res.status(500).json({ error: 'LISTENNOTES_API_KEY is not configured.' });
 
   const { episodeId } = req.params;
   const jobId = createJob();
 
-  // Cache hit — resolve the job immediately, no Whisper call needed
   const cached = getCached(episodeId);
   if (cached) {
     const job = jobs.get(jobId);
@@ -267,21 +464,18 @@ app.post('/api/transcribe/:episodeId', (req, res) => {
     return res.json({ jobId, cached: true });
   }
 
-  // Cache miss — start background transcription
   res.json({ jobId, cached: false });
   transcribeEpisode(episodeId, jobId).catch(() => {});
 });
 
-// Poll transcription job
-app.get('/api/transcribe/job/:jobId', (req, res) => {
+app.get('/api/transcribe/job/:jobId', requireAuth, (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: 'Job not found or expired.' });
   const { transcript, ...rest } = job;
   res.json(job.status === 'done' ? job : rest);
 });
 
-// Chat
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireAuth, async (req, res) => {
   const { messages, episodes } = req.body;
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured.' });
   if (!messages?.length)  return res.status(400).json({ error: 'messages array is required.' });
@@ -312,8 +506,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', requireAuth, (req, res) => {
   res.json({
     status:      'ok',
     listennotes: !!LISTENNOTES_API_KEY,
@@ -327,5 +520,7 @@ app.listen(PORT, () => {
   console.log(`\nPodcast Chat running at http://localhost:${PORT}`);
   console.log(`  ListenNotes: ${LISTENNOTES_API_KEY ? 'set' : 'MISSING'}`);
   console.log(`  Anthropic:   ${ANTHROPIC_API_KEY   ? 'set' : 'MISSING'}`);
-  console.log(`  OpenAI:      ${OPENAI_API_KEY       ? 'set' : 'MISSING'}\n`);
+  console.log(`  OpenAI:      ${OPENAI_API_KEY       ? 'set' : 'MISSING'}`);
+  console.log(`  Email:       ${RESEND_API_KEY        ? 'Resend configured' : 'DEV MODE (links logged to console)'}`);
+  console.log(`  Base URL:    ${BASE_URL}\n`);
 });
