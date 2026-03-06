@@ -2,6 +2,9 @@ import { state } from '../state.js';
 import { escHtml, scrollBottom } from '../utils.js';
 import { sendChatMessage } from '../api.js';
 import { redirectIfUnauth } from './auth.js';
+import { marked } from 'https://esm.sh/marked';
+
+marked.use({ gfm: true, breaks: true });
 
 const chatMessages = document.getElementById('chatMessages');
 const chatInput    = document.getElementById('chatInput');
@@ -20,7 +23,7 @@ export function renderChat() {
   chatMessages.innerHTML = state.chatHistory.map(msg => `
     <div class="message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}">
       <div class="msg-role">${msg.role === 'user' ? 'You' : 'Assistant'}</div>
-      <div class="message-content">${escHtml(msg.content)}</div>
+      <div class="message-content">${msg.role === 'assistant' ? marked.parse(msg.content) : escHtml(msg.content)}</div>
     </div>
   `).join('');
 
