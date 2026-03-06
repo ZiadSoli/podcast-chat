@@ -4,6 +4,7 @@ const axios    = require('axios');
 const FormData = require('form-data');
 const path     = require('path');
 const fs       = require('fs');
+const Database = require('better-sqlite3');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -21,50 +22,73 @@ const listennotes = (endpoint, params = {}) =>
     params,
   });
 
-// ── Transcript cache (persisted to disk) ─────────────────────────────────────
-const DATA_DIR    = path.join(__dirname, 'data');
-const CACHE_FILE  = path.join(DATA_DIR, 'transcripts.json');
-const CACHE_TTL   = 5 * 24 * 60 * 60 * 1000; // 5 days in ms
-let transcriptCache = {};
+// ── SQLite transcript store ───────────────────────────────────────────────────
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-function loadCache() {
+const db = new Database(path.join(DATA_DIR, 'transcripts.db'));
+db.pragma('journal_mode = WAL');  // safer concurrent writes
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS transcripts (
+    episode_id  TEXT PRIMARY KEY,
+    transcript  TEXT NOT NULL,
+    title       TEXT,
+    podcast     TEXT,
+    thumbnail   TEXT,
+    cached_at   INTEGER NOT NULL
+  )
+`);
+
+// Migrate any existing JSON cache into SQLite then remove the old file
+const LEGACY_CACHE = path.join(DATA_DIR, 'transcripts.json');
+if (fs.existsSync(LEGACY_CACHE)) {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (fs.existsSync(CACHE_FILE)) {
-      const raw  = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-      const cutoff = Date.now() - CACHE_TTL;
-      let expired = 0;
-
-      for (const [id, entry] of Object.entries(raw)) {
-        if (entry.cachedAt && entry.cachedAt >= cutoff) {
-          transcriptCache[id] = entry;
-        } else {
-          expired++;
-        }
+    const raw = JSON.parse(fs.readFileSync(LEGACY_CACHE, 'utf8'));
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO transcripts (episode_id, transcript, title, podcast, thumbnail, cached_at)
+      VALUES (@episode_id, @transcript, @title, @podcast, @thumbnail, @cached_at)
+    `);
+    const migrate = db.transaction(entries => {
+      for (const [id, e] of entries) {
+        insert.run({ episode_id: id, transcript: e.transcript, title: e.title || null,
+                     podcast: e.podcast || null, thumbnail: e.thumbnail || null,
+                     cached_at: e.cachedAt || Date.now() });
       }
-
-      const kept = Object.keys(transcriptCache).length;
-      console.log(`  Transcript cache: ${kept} episode(s) loaded${expired ? `, ${expired} expired and removed` : ''}`);
-
-      // Persist the pruned cache back to disk
-      if (expired > 0) saveCache();
-    }
+    });
+    migrate(Object.entries(raw));
+    fs.renameSync(LEGACY_CACHE, LEGACY_CACHE + '.migrated');
+    console.log(`  Migrated ${Object.keys(raw).length} cached transcript(s) from JSON → SQLite`);
   } catch (err) {
-    console.warn('  Could not load transcript cache:', err.message);
-    transcriptCache = {};
+    console.warn('  Could not migrate legacy cache:', err.message);
   }
 }
 
-function saveCache() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(transcriptCache, null, 2), 'utf8');
-  } catch (err) {
-    console.warn('Could not save transcript cache:', err.message);
-  }
+// Prepared statements
+const stmtGet    = db.prepare('SELECT * FROM transcripts WHERE episode_id = ?');
+const stmtUpsert = db.prepare(`
+  INSERT INTO transcripts (episode_id, transcript, title, podcast, thumbnail, cached_at)
+  VALUES (@episode_id, @transcript, @title, @podcast, @thumbnail, @cached_at)
+  ON CONFLICT(episode_id) DO UPDATE SET
+    transcript = excluded.transcript,
+    title      = excluded.title,
+    podcast    = excluded.podcast,
+    thumbnail  = excluded.thumbnail,
+    cached_at  = excluded.cached_at
+`);
+const stmtHas    = db.prepare('SELECT 1 FROM transcripts WHERE episode_id = ?');
+const stmtCount  = db.prepare('SELECT COUNT(*) AS n FROM transcripts');
+
+function getCached(episodeId)  { return stmtGet.get(episodeId) || null; }
+function hasCached(episodeId)  { return !!stmtHas.get(episodeId); }
+function putCached(episodeId, { transcript, title, podcast, thumbnail }) {
+  stmtUpsert.run({ episode_id: episodeId, transcript, title: title || null,
+                   podcast: podcast || null, thumbnail: thumbnail || null,
+                   cached_at: Date.now() });
 }
 
-loadCache();
+const count = stmtCount.get().n;
+console.log(`  Transcript store: ${count} episode(s) in SQLite DB`);
 
 // ── Transcription job store ──────────────────────────────────────────────────
 const jobs = new Map();
@@ -131,15 +155,13 @@ async function transcribeEpisode(episodeId, jobId) {
     job.status     = 'done';
     job.transcript = transcript;
 
-    // ── Persist to disk so future sessions skip re-transcription ──
-    transcriptCache[episodeId] = {
+    // ── Persist to SQLite so future sessions skip re-transcription ──
+    putCached(episodeId, {
       transcript,
       title:     episode.title,
       podcast:   episode.podcast?.title || null,
       thumbnail: episode.thumbnail || episode.podcast?.thumbnail || null,
-      cachedAt:  Date.now(),
-    };
-    saveCache();
+    });
 
   } catch (err) {
     job.status = 'error';
@@ -218,7 +240,7 @@ app.get('/api/podcast/:id/episodes', async (req, res) => {
         thumbnail:        ep.thumbnail || data.thumbnail,
         pub_date_ms:      ep.pub_date_ms,
         audio_length_sec: ep.audio_length_sec,
-        cached:           !!transcriptCache[ep.id],   // ← tell the UI if already cached
+        cached:           hasCached(ep.id),             // ← tell the UI if already cached
       })),
       next_episode_pub_date: data.next_episode_pub_date,
     });
@@ -236,8 +258,8 @@ app.post('/api/transcribe/:episodeId', (req, res) => {
   const jobId = createJob();
 
   // Cache hit — resolve the job immediately, no Whisper call needed
-  if (transcriptCache[episodeId]) {
-    const cached = transcriptCache[episodeId];
+  const cached = getCached(episodeId);
+  if (cached) {
     const job = jobs.get(jobId);
     job.status     = 'done';
     job.transcript = cached.transcript;
@@ -296,7 +318,7 @@ app.get('/api/health', (req, res) => {
     listennotes: !!LISTENNOTES_API_KEY,
     anthropic:   !!ANTHROPIC_API_KEY,
     openai:      !!OPENAI_API_KEY,
-    cachedEpisodes: Object.keys(transcriptCache).length,
+    cachedEpisodes: stmtCount.get().n,
   });
 });
 
