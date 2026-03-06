@@ -618,3 +618,106 @@ html, body {
 .source-tag.transcript { background: var(--success-light); color: var(--success); }
 .source-tag.description { background: var(--warning-light); color: var(--warning); }
 .source-tag.none { background: var(--error-light); color: var(--error); }
+
+/* ── Mobile tab bar (hidden on desktop) ──────────────────────── */
+.mobile-tabs { display: none; }
+
+/* ── Responsive: mobile ───────────────────────────────────────── */
+@media (max-width: 768px) {
+  :root {
+    --header-h: 52px;
+    --tab-bar-h: 60px;
+  }
+
+  /* Compact header */
+  .app-header p   { display: none; }
+  .api-status     { display: none; }
+  .logo           { font-size: 22px; }
+  .app-header h1  { font-size: 16px; }
+
+  /* Single-column layout, minus tab bar */
+  .layout {
+    grid-template-columns: 1fr;
+    height: calc(100dvh - var(--header-h) - var(--tab-bar-h));
+  }
+
+  /* Hide all panels; JS shows the active one */
+  .panel           { display: none; border-right: none; }
+  .panel.mobile-active { display: flex; }
+
+  /* Bottom tab bar */
+  .mobile-tabs {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--tab-bar-h);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 10px rgba(0,0,0,.07);
+    z-index: 200;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-family: var(--font);
+    font-weight: 500;
+    position: relative;
+    transition: color .15s;
+    padding: 6px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab-btn.active { color: var(--primary); }
+
+  .tab-icon  { font-size: 22px; line-height: 1; }
+  .tab-label { font-size: 10px; }
+
+  .tab-badge {
+    position: absolute;
+    top: 5px;
+    right: calc(50% - 20px);
+    background: var(--primary);
+    color: white;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 15px;
+    height: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 3px;
+  }
+
+  /* Larger touch targets */
+  .add-btn    { width: 34px; height: 34px; }
+  .browse-btn { padding: 7px 11px; }
+  .btn-back   { padding: 7px 12px; }
+
+  /* Chat input stays visible above keyboard */
+  .chat-input-row {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    z-index: 10;
+  }
+
+  /* Slightly larger chat text on mobile */
+  .message-content { font-size: 14px; }
+
+  /* Full-width messages on mobile */
+  .message { max-width: 92%; }
+}

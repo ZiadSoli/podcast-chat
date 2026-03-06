@@ -287,6 +287,7 @@ async function addEpisode(id) {
   state.episodes.push(entry);
   renderKb();
   renderSearchResults();
+  if (isMobile()) switchTab('kbPanel'); // show progress on mobile
 
   try {
     const res = await fetch(`/api/transcribe/${encodeURIComponent(id)}`, { method: 'POST' });
@@ -370,6 +371,13 @@ function removeEpisode(id) {
 function renderKb() {
   kbBadge.textContent = state.episodes.length;
   kbFooter.classList.toggle('hidden', state.episodes.length === 0);
+
+  // Sync mobile tab badge
+  const mobileBadge = $('mobileKbBadge');
+  if (mobileBadge) {
+    mobileBadge.textContent = state.episodes.length;
+    mobileBadge.classList.toggle('hidden', state.episodes.length === 0);
+  }
 
   if (state.episodes.length === 0) {
     kbList.innerHTML = `<div class="empty-state"><span class="empty-icon">&#128218;</span><p>Add episodes from search results</p></div>`;
@@ -527,9 +535,44 @@ clearChatBtn.addEventListener('click', () => {
   renderChat();
 });
 
+/* ── Mobile tab navigation ─────────────────────────────────────── */
+const isMobile = () => window.innerWidth <= 768;
+
+function switchTab(panelId) {
+  if (!isMobile()) return;
+  // Show only the requested panel
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('mobile-active'));
+  document.getElementById(panelId)?.classList.add('mobile-active');
+  // Update tab button active state
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.panel === panelId);
+  });
+  // Scroll chat to bottom when switching to it
+  if (panelId === 'chatPanel') scrollBottom(chatMessages);
+}
+
+function initLayout() {
+  if (isMobile()) {
+    // Activate Search tab by default
+    switchTab('searchPanel');
+  } else {
+    // Desktop: remove any mobile-active classes so all panels show via CSS
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('mobile-active'));
+  }
+}
+
+// Tab button clicks
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.panel));
+});
+
+// Re-evaluate layout on resize (e.g. rotating phone, or resizing browser)
+window.addEventListener('resize', initLayout);
+
 /* ── Init ──────────────────────────────────────────────────────── */
 checkHealth();
 renderKb();
 renderChat();
 renderSearchResults();
 updateSendBtn();
+initLayout();
