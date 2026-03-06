@@ -23,7 +23,8 @@ const listennotes = (endpoint, params = {}) =>
   });
 
 // ── SQLite transcript store ───────────────────────────────────────────────────
-const DATA_DIR = path.join(__dirname, 'data');
+// RAILWAY_VOLUME_MOUNT_PATH is set automatically when a Railway volume is attached
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new Database(path.join(DATA_DIR, 'transcripts.db'));
