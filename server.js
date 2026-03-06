@@ -3,6 +3,7 @@ const express  = require('express');
 const axios    = require('axios');
 const FormData = require('form-data');
 const path     = require('path');
+const fs       = require('fs');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -19,6 +20,51 @@ const listennotes = (endpoint, params = {}) =>
     headers: { 'X-ListenAPI-Key': LISTENNOTES_API_KEY },
     params,
   });
+
+// ── Transcript cache (persisted to disk) ─────────────────────────────────────
+const DATA_DIR    = path.join(__dirname, 'data');
+const CACHE_FILE  = path.join(DATA_DIR, 'transcripts.json');
+const CACHE_TTL   = 5 * 24 * 60 * 60 * 1000; // 5 days in ms
+let transcriptCache = {};
+
+function loadCache() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (fs.existsSync(CACHE_FILE)) {
+      const raw  = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+      const cutoff = Date.now() - CACHE_TTL;
+      let expired = 0;
+
+      for (const [id, entry] of Object.entries(raw)) {
+        if (entry.cachedAt && entry.cachedAt >= cutoff) {
+          transcriptCache[id] = entry;
+        } else {
+          expired++;
+        }
+      }
+
+      const kept = Object.keys(transcriptCache).length;
+      console.log(`  Transcript cache: ${kept} episode(s) loaded${expired ? `, ${expired} expired and removed` : ''}`);
+
+      // Persist the pruned cache back to disk
+      if (expired > 0) saveCache();
+    }
+  } catch (err) {
+    console.warn('  Could not load transcript cache:', err.message);
+    transcriptCache = {};
+  }
+}
+
+function saveCache() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(transcriptCache, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('Could not save transcript cache:', err.message);
+  }
+}
+
+loadCache();
 
 // ── Transcription job store ──────────────────────────────────────────────────
 const jobs = new Map();
@@ -74,14 +120,26 @@ async function transcribeEpisode(episodeId, jobId) {
         },
         maxBodyLength: Infinity,
         maxContentLength: Infinity,
-        timeout: 600_000, // 10 min max for Whisper
+        timeout: 600_000,
       }
     );
 
-    job.status     = 'done';
-    job.transcript = typeof whisperRes.data === 'string'
+    const transcript = typeof whisperRes.data === 'string'
       ? whisperRes.data
       : whisperRes.data.text || JSON.stringify(whisperRes.data);
+
+    job.status     = 'done';
+    job.transcript = transcript;
+
+    // ── Persist to disk so future sessions skip re-transcription ──
+    transcriptCache[episodeId] = {
+      transcript,
+      title:     episode.title,
+      podcast:   episode.podcast?.title || null,
+      thumbnail: episode.thumbnail || episode.podcast?.thumbnail || null,
+      cachedAt:  Date.now(),
+    };
+    saveCache();
 
   } catch (err) {
     job.status = 'error';
@@ -97,7 +155,6 @@ async function downloadAudio(url) {
     responseType: 'stream',
     timeout: 90_000,
     headers: { Range: `bytes=0-${Math.ceil(AUDIO_LIMIT) - 1}` },
-    // Allow both 200 and 206 (partial content)
     validateStatus: s => s >= 200 && s < 300,
   });
 
@@ -108,13 +165,13 @@ async function downloadAudio(url) {
         total += chunk.length;
       }
       if (total >= AUDIO_LIMIT) {
-        response.data.destroy(); // stop downloading once limit hit
+        response.data.destroy();
         resolve();
       }
     });
     response.data.on('end', resolve);
     response.data.on('error', reject);
-    response.data.on('close', resolve); // fires after destroy()
+    response.data.on('close', resolve);
   });
 
   return Buffer.concat(chunks);
@@ -161,6 +218,7 @@ app.get('/api/podcast/:id/episodes', async (req, res) => {
         thumbnail:        ep.thumbnail || data.thumbnail,
         pub_date_ms:      ep.pub_date_ms,
         audio_length_sec: ep.audio_length_sec,
+        cached:           !!transcriptCache[ep.id],   // ← tell the UI if already cached
       })),
       next_episode_pub_date: data.next_episode_pub_date,
     });
@@ -169,23 +227,32 @@ app.get('/api/podcast/:id/episodes', async (req, res) => {
   }
 });
 
-// Start transcription job
+// Start transcription job (or return cached transcript immediately)
 app.post('/api/transcribe/:episodeId', (req, res) => {
   if (!OPENAI_API_KEY)      return res.status(500).json({ error: 'OPENAI_API_KEY is not configured.' });
   if (!LISTENNOTES_API_KEY) return res.status(500).json({ error: 'LISTENNOTES_API_KEY is not configured.' });
 
+  const { episodeId } = req.params;
   const jobId = createJob();
-  res.json({ jobId });
 
-  // Fire-and-forget — runs in the background
-  transcribeEpisode(req.params.episodeId, jobId).catch(() => {});
+  // Cache hit — resolve the job immediately, no Whisper call needed
+  if (transcriptCache[episodeId]) {
+    const cached = transcriptCache[episodeId];
+    const job = jobs.get(jobId);
+    job.status     = 'done';
+    job.transcript = cached.transcript;
+    return res.json({ jobId, cached: true });
+  }
+
+  // Cache miss — start background transcription
+  res.json({ jobId, cached: false });
+  transcribeEpisode(episodeId, jobId).catch(() => {});
 });
 
 // Poll transcription job
 app.get('/api/transcribe/job/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: 'Job not found or expired.' });
-  // Don't send the full transcript on every poll — only when done
   const { transcript, ...rest } = job;
   res.json(job.status === 'done' ? job : rest);
 });
@@ -229,6 +296,7 @@ app.get('/api/health', (req, res) => {
     listennotes: !!LISTENNOTES_API_KEY,
     anthropic:   !!ANTHROPIC_API_KEY,
     openai:      !!OPENAI_API_KEY,
+    cachedEpisodes: Object.keys(transcriptCache).length,
   });
 });
 
