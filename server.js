@@ -260,7 +260,7 @@ app.post('/api/auth/request', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Email send error:', err.message);
-    res.status(500).json({ error: 'Failed to send email. Please try again.' });
+    res.status(500).json({ error: `Email error: ${err.message}` });
   }
 });
 
