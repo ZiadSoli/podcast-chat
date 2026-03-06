@@ -234,18 +234,22 @@ function renderEpisodeResults() {
     const title   = ep.title || 'Untitled';
     const dur     = fmtDuration(ep.audio_length_sec);
     const date    = fmtDate(ep.pub_date_ms);
+    const cached  = ep.cached;
 
     return `
       <div class="episode-card ${isAdded ? 'is-added' : ''}">
         <img class="ep-thumb" src="${escHtml(thumb)}" alt="" onerror="this.style.visibility='hidden'" />
         <div class="ep-body">
           <div class="ep-title" title="${escHtml(title)}">${escHtml(title)}</div>
-          <div class="ep-meta">${[dur, date].filter(Boolean).join(' · ')}</div>
+          <div class="ep-meta">
+            ${[dur, date].filter(Boolean).join(' · ')}
+            ${cached ? '<span class="cached-badge" title="Transcript already saved — loads instantly">⚡ cached</span>' : ''}
+          </div>
         </div>
         <button
           class="add-btn ${isAdded ? 'added' : ''}"
           data-id="${escHtml(ep.id)}"
-          title="${isAdded ? 'Already added' : 'Add to knowledge base'}"
+          title="${isAdded ? 'Already added' : cached ? 'Add (instant — already transcribed)' : 'Add to knowledge base'}"
           ${isAdded ? 'disabled' : ''}
         >${isAdded ? '✓' : '+'}</button>
       </div>
@@ -288,7 +292,8 @@ async function addEpisode(id) {
     const res = await fetch(`/api/transcribe/${encodeURIComponent(id)}`, { method: 'POST' });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    pollJob(id, data.jobId);
+    // If cached, poll almost immediately — transcript is already ready
+    pollJob(id, data.jobId, data.cached ? 100 : JOB_POLL_INTERVAL);
   } catch (err) {
     const idx = state.episodes.findIndex(e => e.id === id);
     if (idx !== -1) {
@@ -303,7 +308,7 @@ async function addEpisode(id) {
 const JOB_POLL_INTERVAL = 3000;
 const JOB_MAX_POLLS     = 200; // ~10 minutes
 
-function pollJob(episodeId, jobId) {
+function pollJob(episodeId, jobId, initialDelay = JOB_POLL_INTERVAL) {
   let polls = 0;
 
   const statusMap = {
@@ -351,7 +356,7 @@ function pollJob(episodeId, jobId) {
     }
   };
 
-  setTimeout(tick, JOB_POLL_INTERVAL);
+  setTimeout(tick, initialDelay);
 }
 
 /* ── Remove episode from KB ────────────────────────────────────── */
