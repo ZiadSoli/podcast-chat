@@ -553,8 +553,9 @@ function switchTab(panelId) {
 
 function initLayout() {
   if (isMobile()) {
-    // Activate Search tab by default
-    switchTab('searchPanel');
+    // Only set the default tab if none is active yet (initial load, not keyboard/resize)
+    const hasActive = document.querySelector('.panel.mobile-active');
+    if (!hasActive) switchTab('searchPanel');
   } else {
     // Desktop: remove any mobile-active classes so all panels show via CSS
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('mobile-active'));
