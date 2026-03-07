@@ -7,6 +7,26 @@ const { getEpisodeById } = require('./podcastindex');
 
 const AUDIO_LIMIT = 24.5 * 1024 * 1024;
 
+// ── Transcript formatting ─────────────────────────────────────────────────────
+function fmtSecs(seconds) {
+  const s = Math.floor(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function formatTranscript(data) {
+  if (typeof data === 'string') return data;
+  if (Array.isArray(data.segments) && data.segments.length > 0) {
+    return data.segments
+      .map(seg => `[${fmtSecs(seg.start)}] ${seg.text.trim()}`)
+      .join('\n');
+  }
+  return data.text || JSON.stringify(data);
+}
+
 // ── Job event bus — SSE handlers listen here ──────────────────────────────────
 const jobEmitter = new EventEmitter();
 jobEmitter.setMaxListeners(0); // one listener per active SSE connection — suppress Node warning
@@ -83,7 +103,8 @@ async function transcribeEpisode(episodeId, jobId) {
       knownLength: audioBuffer.length,
     });
     form.append('model', 'whisper-1');
-    form.append('response_format', 'text');
+    form.append('response_format', 'verbose_json');
+    form.append('timestamp_granularities[]', 'segment');
 
     const whisperRes = await axios.post(
       'https://api.openai.com/v1/audio/transcriptions',
@@ -99,9 +120,8 @@ async function transcribeEpisode(episodeId, jobId) {
       }
     );
 
-    const transcript = typeof whisperRes.data === 'string'
-      ? whisperRes.data
-      : whisperRes.data.text || JSON.stringify(whisperRes.data);
+    // Format timestamped transcript: "[M:SS] segment text" per line
+    const transcript = formatTranscript(whisperRes.data);
 
     stmtSetDone.run('done', transcript, Date.now(), jobId);
     jobEmitter.emit(jobId, { status: 'done', transcript });

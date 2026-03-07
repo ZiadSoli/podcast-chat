@@ -68,8 +68,58 @@ db.exec(`
     added_at      INTEGER NOT NULL,
     PRIMARY KEY (collection_id, feed_id),
     FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS episode_queue (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    collection_id  INTEGER NOT NULL,
+    feed_id        TEXT NOT NULL,
+    feed_title     TEXT,
+    episode_id     TEXT NOT NULL,
+    episode_title  TEXT,
+    episode_url    TEXT,
+    date_published INTEGER,
+    ai_summary     TEXT,
+    queued_at      INTEGER NOT NULL,
+    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+    UNIQUE (collection_id, episode_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS summary_archive (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    collection_id   INTEGER NOT NULL,
+    collection_name TEXT NOT NULL,
+    frequency       TEXT,
+    sent_at         INTEGER NOT NULL,
+    total_episodes  INTEGER NOT NULL DEFAULT 0,
+    created_at      INTEGER NOT NULL,
+    FOREIGN KEY (user_id)       REFERENCES users(id)       ON DELETE CASCADE,
+    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS summary_archive_episodes (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    archive_id     INTEGER NOT NULL,
+    feed_id        TEXT NOT NULL,
+    feed_title     TEXT,
+    episode_id     TEXT NOT NULL,
+    episode_title  TEXT,
+    episode_url    TEXT,
+    date_published INTEGER,
+    ai_summary     TEXT,
+    FOREIGN KEY (archive_id) REFERENCES summary_archive(id) ON DELETE CASCADE
   )
 `);
+
+// ── Runtime migration: add last_checked_at to collections if missing ──────────
+{
+  const cols = db.prepare('PRAGMA table_info(collections)').all();
+  if (!cols.some(c => c.name === 'last_checked_at')) {
+    db.exec('ALTER TABLE collections ADD COLUMN last_checked_at INTEGER');
+    console.log('  Migrated: added last_checked_at to collections');
+  }
+}
 
 // Migrate any existing JSON cache into SQLite then remove the old file
 const LEGACY_CACHE = path.join(DATA_DIR, 'transcripts.json');

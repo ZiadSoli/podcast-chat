@@ -2,9 +2,23 @@ import { state } from '../state.js';
 import { escHtml, scrollBottom } from '../utils.js';
 import { sendChatMessage } from '../api.js';
 import { redirectIfUnauth } from './auth.js';
+import { seekTo } from './player.js';
 import { marked } from 'https://esm.sh/marked';
 
 marked.use({ gfm: true, breaks: true });
+
+// ── Timestamp linkification ───────────────────────────────────────────────────
+// Converts [M:SS] or [H:MM:SS] patterns inside rendered HTML into clickable
+// buttons that call seekTo() on the audio player.
+function linkifyTimestamps(html) {
+  return html.replace(/\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g, (match, ts) => {
+    const parts = ts.split(':').map(Number);
+    const secs = parts.length === 3
+      ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+      : parts[0] * 60 + parts[1];
+    return `<button class="ts-link" data-seconds="${secs}" title="Jump to ${ts}">${match}</button>`;
+  });
+}
 
 const chatMessages = document.getElementById('chatMessages');
 const chatInput    = document.getElementById('chatInput');
@@ -20,12 +34,16 @@ export function renderChat() {
     return;
   }
 
-  chatMessages.innerHTML = state.chatHistory.map(msg => `
+  chatMessages.innerHTML = state.chatHistory.map(msg => {
+    const content = msg.role === 'assistant'
+      ? linkifyTimestamps(marked.parse(msg.content))
+      : escHtml(msg.content);
+    return `
     <div class="message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}">
       <div class="msg-role">${msg.role === 'user' ? 'You' : 'Assistant'}</div>
-      <div class="message-content">${msg.role === 'assistant' ? marked.parse(msg.content) : escHtml(msg.content)}</div>
-    </div>
-  `).join('');
+      <div class="message-content">${content}</div>
+    </div>`;
+  }).join('');
 
   scrollBottom(chatMessages);
 }
@@ -97,5 +115,11 @@ export function initChat() {
   clearChatBtn.addEventListener('click', () => {
     state.chatHistory = [];
     renderChat();
+  });
+
+  // Timestamp links in assistant messages → seek audio player
+  chatMessages.addEventListener('click', e => {
+    const btn = e.target.closest('.ts-link');
+    if (btn) seekTo(parseInt(btn.dataset.seconds, 10));
   });
 }

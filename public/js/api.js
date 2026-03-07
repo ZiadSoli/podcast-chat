@@ -50,5 +50,7 @@ export const createCollection        = data        => fetch('/api/collections', 
 export const getCollection           = id          => fetch(`/api/collections/${id}`);
 export const updateCollection        = (id, data)  => fetch(`/api/collections/${id}`,                { method: 'PUT',    ...json(data) });
 export const deleteCollection        = id          => fetch(`/api/collections/${id}`,                { method: 'DELETE' });
-export const addFeedToCollection     = (id, feed)  => fetch(`/api/collections/${id}/feeds`,          { method: 'POST',   ...json(feed) });
-export const removeFeedFromCollection = (id, fid)  => fetch(`/api/collections/${id}/feeds/${fid}`,   { method: 'DELETE' });
+export const addFeedToCollection      = (id, feed)  => fetch(`/api/collections/${id}/feeds`,                    { method: 'POST',   ...json(feed) });
+export const removeFeedFromCollection = (id, fid)  => fetch(`/api/collections/${id}/feeds/${fid}`,             { method: 'DELETE' });
+export const getCollectionArchive     = id          => fetch(`/api/collections/${id}/archive`);
+export const getCollectionArchiveEntry = (id, aid)  => fetch(`/api/collections/${id}/archive/${aid}`);

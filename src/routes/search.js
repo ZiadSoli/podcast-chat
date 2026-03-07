@@ -72,6 +72,7 @@ router.get('/podcast/:id/episodes', requireAuth, async (req, res) => {
         thumbnail:        ep.image || ep.feedImage || feedImg,
         pub_date_ms:      (ep.datePublished || 0) * 1000, // PI uses seconds; frontend expects ms
         audio_length_sec: ep.duration || null,
+        audio_url:        ep.enclosureUrl || null,
         cached:           hasCached(String(ep.id)),
       })),
       next_episode_pub_date,

@@ -5,13 +5,20 @@ import {
   updateCollection, deleteCollection,
   addFeedToCollection, removeFeedFromCollection,
   searchPodcasts,
+  getCollectionArchive, getCollectionArchiveEntry,
 } from '../api.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const overlay      = document.getElementById('collectionsOverlay');
-const listView     = document.getElementById('colListView');
-const formView     = document.getElementById('colFormView');
-const colList      = document.getElementById('colList');
+const overlay           = document.getElementById('collectionsOverlay');
+const listView          = document.getElementById('colListView');
+const formView          = document.getElementById('colFormView');
+const archiveView       = document.getElementById('colArchiveView');
+const archiveDetailView = document.getElementById('colArchiveDetailView');
+const archiveTitle      = document.getElementById('colArchiveTitle');
+const archiveList       = document.getElementById('colArchiveList');
+const archiveDetailTitle = document.getElementById('colArchiveDetailTitle');
+const archiveDetail     = document.getElementById('colArchiveDetail');
+const colList           = document.getElementById('colList');
 const colFormTitle = document.getElementById('colFormTitle');
 const nameInput    = document.getElementById('colNameInput');
 const descInput    = document.getElementById('colDescInput');
@@ -24,9 +31,10 @@ const saveBtn      = document.getElementById('colSaveBtn');
 const deleteBtn    = document.getElementById('colDeleteBtn');
 
 // ── Form-local state ──────────────────────────────────────────────────────────
-let editingId   = null;   // null = creating, number = editing
-let formFeeds   = [];     // [{feed_id, feed_title, feed_thumbnail}]
-let searchTimer = null;
+let editingId             = null;  // null = creating, number = editing
+let formFeeds             = [];    // [{feed_id, feed_title, feed_thumbnail}]
+let searchTimer           = null;
+let currentArchiveColId   = null;  // collection being browsed in archive view
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function freqLabel(col) {
@@ -59,6 +67,11 @@ export function renderCollections() {
         <div class="col-item-name">${escHtml(col.name)}</div>
         <div class="col-item-meta">${freqLabel(col)} · ${col.feed_count} show${col.feed_count !== 1 ? 's' : ''} · Last sent ${formatDate(col.last_sent_at)}</div>
       </div>
+      <button class="col-item-history btn-ghost btn-sm" data-id="${col.id}" title="View history">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </button>
       <svg class="col-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="9 18 15 12 9 6"/>
       </svg>
@@ -67,6 +80,13 @@ export function renderCollections() {
 
   colList.querySelectorAll('.col-item').forEach(el => {
     el.addEventListener('click', () => openForm(Number(el.dataset.id)));
+  });
+
+  colList.querySelectorAll('.col-item-history').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation(); // prevent the parent col-item click (edit form)
+      openArchive(Number(btn.dataset.id));
+    });
   });
 }
 
@@ -102,14 +122,31 @@ export function closeCollections() {
   overlay.classList.add('hidden');
 }
 
-function showListView() {
-  listView.classList.remove('hidden');
+function hideAllViews() {
+  listView.classList.add('hidden');
   formView.classList.add('hidden');
+  archiveView.classList.add('hidden');
+  archiveDetailView.classList.add('hidden');
+}
+
+function showListView() {
+  hideAllViews();
+  listView.classList.remove('hidden');
 }
 
 function showFormView() {
-  listView.classList.add('hidden');
+  hideAllViews();
   formView.classList.remove('hidden');
+}
+
+function showArchiveView() {
+  hideAllViews();
+  archiveView.classList.remove('hidden');
+}
+
+function showArchiveDetailView() {
+  hideAllViews();
+  archiveDetailView.classList.remove('hidden');
 }
 
 // ── Load collections from server ──────────────────────────────────────────────
@@ -308,11 +345,103 @@ async function confirmDelete() {
   }
 }
 
+// ── Archive: list view ────────────────────────────────────────────────────────
+async function openArchive(collectionId) {
+  currentArchiveColId = collectionId;
+  const col = state.collections.find(c => c.id === collectionId);
+  archiveTitle.textContent = col ? `${escHtml(col.name)} — History` : 'History';
+  archiveList.innerHTML = '<div class="col-search-spinner">Loading…</div>';
+  showArchiveView();
+
+  try {
+    const res  = await getCollectionArchive(collectionId);
+    const data = await res.json();
+    const archives = data.archives || [];
+
+    if (!archives.length) {
+      archiveList.innerHTML = `
+        <div class="empty-state">
+          <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <p>No summaries sent yet for this collection.</p>
+        </div>`;
+      return;
+    }
+
+    archiveList.innerHTML = archives.map(a => `
+      <div class="col-item col-archive-item" data-id="${a.id}">
+        <div class="col-item-body">
+          <div class="col-item-name">${formatDate(a.sent_at)}</div>
+          <div class="col-item-meta">${a.total_episodes} episode${a.total_episodes !== 1 ? 's' : ''} · ${a.frequency === 'daily' ? 'Daily' : 'Weekly'} summary</div>
+        </div>
+        <svg class="col-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+    `).join('');
+
+    archiveList.querySelectorAll('.col-archive-item').forEach(el => {
+      el.addEventListener('click', () => openArchiveDetail(collectionId, Number(el.dataset.id)));
+    });
+  } catch (err) {
+    archiveList.innerHTML = `<div class="col-search-empty">Failed to load history.</div>`;
+    console.error('[collections] archive load error:', err);
+  }
+}
+
+// ── Archive: detail view ──────────────────────────────────────────────────────
+async function openArchiveDetail(collectionId, archiveId) {
+  archiveDetailTitle.textContent = 'Loading…';
+  archiveDetail.innerHTML = '<div class="col-search-spinner">Loading…</div>';
+  showArchiveDetailView();
+
+  try {
+    const res  = await getCollectionArchiveEntry(collectionId, archiveId);
+    const data = await res.json();
+
+    archiveDetailTitle.textContent = formatDate(data.sent_at);
+
+    // Group episodes by feed
+    const feedMap = new Map();
+    for (const ep of data.episodes || []) {
+      const key = ep.feed_title || 'Podcast';
+      if (!feedMap.has(key)) feedMap.set(key, []);
+      feedMap.get(key).push(ep);
+    }
+
+    if (!feedMap.size) {
+      archiveDetail.innerHTML = '<div class="col-search-empty">No episodes in this summary.</div>';
+      return;
+    }
+
+    archiveDetail.innerHTML = Array.from(feedMap.entries()).map(([feedTitle, episodes]) => `
+      <div class="col-archive-feed">
+        <div class="col-archive-feed-title">${escHtml(feedTitle)}</div>
+        ${episodes.map(ep => `
+          <div class="col-archive-episode">
+            <a class="col-archive-ep-title" href="${escHtml(ep.episode_url || '#')}" target="_blank" rel="noopener">
+              ${escHtml(ep.episode_title || 'Untitled')}
+            </a>
+            ${ep.date_published ? `<div class="col-archive-ep-date">${formatDate(ep.date_published * 1000)}</div>` : ''}
+            ${ep.ai_summary ? `<p class="col-archive-ep-summary">${escHtml(ep.ai_summary)}</p>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+  } catch (err) {
+    archiveDetail.innerHTML = `<div class="col-search-empty">Failed to load summary.</div>`;
+    console.error('[collections] archive detail error:', err);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 export function initCollections() {
   document.getElementById('colCloseBtn').addEventListener('click', closeCollections);
   document.getElementById('colNewBtn').addEventListener('click', () => openForm(null));
   document.getElementById('colBackBtn').addEventListener('click', showListView);
+  document.getElementById('colArchiveBackBtn').addEventListener('click', showListView);
+  document.getElementById('colArchiveDetailBackBtn').addEventListener('click', () => openArchive(currentArchiveColId));
   saveBtn.addEventListener('click', saveForm);
   deleteBtn.addEventListener('click', confirmDelete);
 

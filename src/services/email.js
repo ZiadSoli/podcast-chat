@@ -48,10 +48,6 @@ async function sendMagicLinkEmail(email, token) {
 
 // ── Collection summary email ──────────────────────────────────────────────────
 
-function stripHtml(raw) {
-  return (raw || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 180);
-}
-
 function fmtDate(datePublished) {
   if (!datePublished) return '';
   return new Date(datePublished * 1000).toLocaleDateString('en-US', {
@@ -60,19 +56,20 @@ function fmtDate(datePublished) {
 }
 
 function buildSummaryHtml(collection, feedsWithEpisodes, period, totalEps) {
-  const noEpisodes = totalEps === 0;
-
   const feedSections = feedsWithEpisodes.map(f => {
     if (!f.episodes.length) return '';
     const rows = f.episodes.map(ep => {
-      const desc = stripHtml(ep.description);
-      const date = fmtDate(ep.datePublished);
+      // Episodes come from the queue: use episode_title, episode_url, ai_summary, date_published
+      const title   = ep.episode_title || ep.title || 'Untitled';
+      const url     = ep.episode_url   || ep.enclosureUrl || '#';
+      const summary = ep.ai_summary    || '';
+      const date    = fmtDate(ep.date_published || ep.datePublished);
       return `
         <tr>
           <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;vertical-align:top">
-            <a href="${ep.enclosureUrl || '#'}" style="font-weight:600;color:#18181b;text-decoration:none;font-size:14px">${ep.title || 'Untitled'}</a>
+            <a href="${url}" style="font-weight:600;color:#18181b;text-decoration:none;font-size:14px">${title}</a>
             <div style="font-size:12px;color:#6b7280;margin-top:3px">${f.feed_title || ''}${date ? ' · ' + date : ''}</div>
-            ${desc ? `<div style="font-size:13px;color:#374151;margin-top:4px">${desc}…</div>` : ''}
+            ${summary ? `<div style="font-size:13px;color:#374151;margin-top:4px">${summary}</div>` : ''}
           </td>
         </tr>`;
     }).join('');
@@ -86,15 +83,11 @@ function buildSummaryHtml(collection, feedsWithEpisodes, period, totalEps) {
       </div>`;
   }).join('');
 
-  const body = noEpisodes
-    ? `<p style="color:#6b7280">No new episodes ${period} for this collection.</p>`
-    : feedSections;
-
   return `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#111">
       <h2 style="margin:0 0 4px;font-size:20px">${collection.name}</h2>
       <p style="color:#6b7280;margin:0 0 24px;font-size:13px">Your ${collection.frequency} summary · ${totalEps} new episode${totalEps !== 1 ? 's' : ''} ${period}</p>
-      ${body}
+      ${feedSections}
       <p style="color:#aaa;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px">Podcast Chat · You're receiving this because you set up a collection summary.</p>
     </div>`;
 }
@@ -106,20 +99,17 @@ function buildSummaryText(collection, feedsWithEpisodes, period, totalEps) {
     '',
   ];
 
-  if (totalEps === 0) {
-    lines.push(`No new episodes ${period}.`);
-  } else {
-    for (const f of feedsWithEpisodes) {
-      if (!f.episodes.length) continue;
-      lines.push(`── ${f.feed_title || 'Podcast'} ──`);
-      for (const ep of f.episodes) {
-        const date = fmtDate(ep.datePublished);
-        lines.push(`• ${ep.title || 'Untitled'}${date ? '  (' + date + ')' : ''}`);
-        const desc = stripHtml(ep.description);
-        if (desc) lines.push(`  ${desc}…`);
-      }
-      lines.push('');
+  for (const f of feedsWithEpisodes) {
+    if (!f.episodes.length) continue;
+    lines.push(`── ${f.feed_title || 'Podcast'} ──`);
+    for (const ep of f.episodes) {
+      const title   = ep.episode_title || ep.title || 'Untitled';
+      const date    = fmtDate(ep.date_published || ep.datePublished);
+      const summary = ep.ai_summary || '';
+      lines.push(`• ${title}${date ? '  (' + date + ')' : ''}`);
+      if (summary) lines.push(`  ${summary}`);
     }
+    lines.push('');
   }
 
   return lines.join('\n');

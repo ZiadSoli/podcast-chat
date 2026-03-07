@@ -1109,6 +1109,64 @@ html, body {
 
 .col-delete-btn:hover { background: var(--error-light); }
 
+/* ── Collection history button ─────────────────────────────────── */
+.col-item-history {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.col-item:hover .col-item-history { opacity: 1; }
+
+/* ── Archive views ─────────────────────────────────────────────── */
+.col-archive-feed {
+  margin-bottom: 24px;
+}
+
+.col-archive-feed-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.col-archive-episode {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.col-archive-episode:last-child { border-bottom: none; }
+
+.col-archive-ep-title {
+  display: block;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  margin-bottom: 2px;
+}
+
+.col-archive-ep-title:hover { text-decoration: underline; }
+
+.col-archive-ep-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.col-archive-ep-summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
 /* ── Collections button in header ─────────────────────────────── */
 #collectionsBtn {
   padding: 6px 12px;
@@ -1124,4 +1182,192 @@ html, body {
   }
 
   #collectionsBtn { display: none; } /* accessed via tab bar on mobile */
+}
+
+/* ── Audio player bar ──────────────────────────────────────────── */
+:root { --player-h: 64px; }
+
+.audio-player {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--player-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 150;                        /* above content, below header (100) */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, .06);
+}
+
+.audio-player.hidden { display: none; }
+
+/* Push the layout up and the mobile tabs up when player is visible */
+body:has(.audio-player:not(.hidden)) .layout {
+  height: calc(100vh - var(--header-h) - var(--player-h));
+}
+
+.player-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--border);
+}
+
+.player-info {
+  flex: 0 0 180px;
+  overflow: hidden;
+}
+
+.player-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-podcast {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.player-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-btn:hover { background: var(--surface-raised); color: var(--text); }
+
+.player-play-btn {
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+}
+
+.player-play-btn:hover { background: var(--primary-hover); color: white; }
+
+.player-close-btn { margin-left: 4px; color: var(--text-muted); }
+
+.player-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.player-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-seek {
+  flex: 1;
+  height: 4px;
+  cursor: pointer;
+  accent-color: var(--primary);
+  min-width: 60px;
+}
+
+.player-speed {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+/* ── Listen button on KB items ─────────────────────────────────── */
+.listen-btn {
+  flex-shrink: 0;
+  align-self: center;
+  background: none;
+  border: 1px solid var(--primary-muted);
+  border-radius: var(--radius-sm);
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--primary);
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.kb-item:hover .listen-btn { opacity: 1; }
+.listen-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* ── Timestamp links in chat ───────────────────────────────────── */
+.ts-link {
+  display: inline;
+  background: var(--primary-light);
+  color: var(--primary);
+  border: none;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s;
+  font-variant-numeric: tabular-nums;
+}
+
+.ts-link:hover { background: var(--primary-muted); }
+
+/* ── Mobile: player above tab bar ──────────────────────────────── */
+@media (max-width: 900px) {
+  .audio-player {
+    bottom: var(--tab-bar-h);
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  body:has(.audio-player:not(.hidden)) .layout {
+    height: calc(100dvh - var(--header-h) - var(--tab-bar-h) - var(--player-h) - env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(.audio-player:not(.hidden)) .collections-overlay {
+    bottom: calc(var(--tab-bar-h) + var(--player-h));
+  }
+
+  .player-info  { flex: 0 0 90px; }
+  .player-speed { display: none; }
 }

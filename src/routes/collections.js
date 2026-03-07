@@ -50,6 +50,26 @@ const stmtRemoveFeed = db.prepare(`
   DELETE FROM collection_feeds WHERE collection_id = ? AND feed_id = ?
 `);
 
+const stmtListArchive = db.prepare(`
+  SELECT id, sent_at, total_episodes, frequency, collection_name
+  FROM summary_archive
+  WHERE collection_id = ?
+  ORDER BY sent_at DESC
+`);
+
+const stmtGetArchive = db.prepare(`
+  SELECT id, sent_at, total_episodes, frequency, collection_name
+  FROM summary_archive
+  WHERE id = ? AND collection_id = ?
+`);
+
+const stmtGetArchiveEpisodes = db.prepare(`
+  SELECT feed_title, episode_title, episode_url, date_published, ai_summary
+  FROM summary_archive_episodes
+  WHERE archive_id = ?
+  ORDER BY date_published ASC
+`);
+
 // ── Ownership helper ──────────────────────────────────────────────────────────
 function ownedCollection(req, res) {
   const col = stmtGetCollection.get(req.params.id, req.session.userId);
@@ -151,6 +171,23 @@ router.delete('/collections/:id/feeds/:feedId', requireAuth, (req, res) => {
   if (!col) return;
   stmtRemoveFeed.run(col.id, req.params.feedId);
   res.json({ ok: true });
+});
+
+// GET /api/collections/:id/archive — list all past sent summaries for a collection
+router.get('/collections/:id/archive', requireAuth, (req, res) => {
+  const col = ownedCollection(req, res);
+  if (!col) return;
+  res.json({ archives: stmtListArchive.all(col.id) });
+});
+
+// GET /api/collections/:id/archive/:archiveId — single summary with its episodes
+router.get('/collections/:id/archive/:archiveId', requireAuth, (req, res) => {
+  const col = ownedCollection(req, res);
+  if (!col) return;
+  const archive = stmtGetArchive.get(req.params.archiveId, col.id);
+  if (!archive) return res.status(404).json({ error: 'Archive entry not found.' });
+  const episodes = stmtGetArchiveEpisodes.all(archive.id);
+  res.json({ ...archive, episodes });
 });
 
 module.exports = router;

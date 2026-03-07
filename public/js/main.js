@@ -3,6 +3,7 @@ import { initSearch, renderSearchResults } from './components/search.js';
 import { initKnowledgeBase, addEpisode, renderKb } from './components/knowledge-base.js';
 import { initChat, renderChat, updateSendBtn } from './components/chat.js';
 import { initCollections, openCollections } from './components/collections.js';
+import { initPlayer } from './components/player.js';
 import { checkHealth } from './api.js';
 
 // ── Layout / mobile tabs ──────────────────────────────────────────
@@ -48,6 +49,7 @@ initSearch({ onAddEpisode: id => addEpisode(id) });
 initKnowledgeBase({ onEpisodeAdded: () => { if (isMobile()) switchTab('kbPanel'); } });
 initChat();
 initCollections();
+initPlayer();
 
 // Header Collections button
 document.getElementById('collectionsBtn').addEventListener('click', openCollections);

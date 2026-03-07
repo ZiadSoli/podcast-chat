@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Podcast Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    button, input { font-family: inherit; font-size: inherit; }
+
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --text: #0f172a;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --error: #dc2626;
+      --error-light: #fef2f2;
+      --success: #16a34a;
+      --success-light: #f0fdf4;
+      --radius: 8px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      height: 56px;
+      padding: 0 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 30px;
+      height: 30px;
+      background: var(--primary);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .logo-name {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: var(--text);
+    }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-start;
+      gap: 72px;
+      max-width: 860px;
+      width: 100%;
+    }
+
+    /* ── Left: copy ── */
+    .hero-copy {
+      flex: 1;
+      padding-top: 12px;
+    }
+
+    .hero-copy h1 {
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      line-height: 1.25;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .hero-copy p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .feature-list {
+      margin-top: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .feature-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      flex-shrink: 0;
+    }
+
+    /* ── Right: login card ── */
+    .login-card {
+      width: 100%;
+      max-width: 360px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--surface);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      margin-bottom: 12px;
+    }
+
+    input[type="email"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 10px 16px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .error-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--error-light);
+      border: 1px solid #fca5a5;
+      border-radius: var(--radius);
+      color: var(--error);
+      font-size: 13px;
+      margin-bottom: 14px;
+      line-height: 1.4;
+    }
+
+    .note {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ── Sent state ── */
+    .sent-state {
+      text-align: center;
+    }
+
+    .sent-icon {
+      width: 44px;
+      height: 44px;
+      background: var(--success-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+      color: var(--success);
+    }
+
+    .sent-state h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .sent-state p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+
+    .btn-ghost {
+      width: 100%;
+      padding: 8px 14px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+
+    .hidden { display: none !important; }
+
+    /* ── Responsive ── */
+    @media (max-width: 680px) {
+      main { padding: 32px 20px; align-items: flex-start; }
+      .hero { flex-direction: column; gap: 32px; }
+      .hero-copy h1 { font-size: 24px; }
+      .login-card { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="/" class="logo-wrap">
+      <div class="logo-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+      <span class="logo-name">Podcast Chat</span>
+    </a>
+  </header>
+
+  <main>
+    <div class="hero">
+
+      <div class="hero-copy">
+        <h1>Chat with your<br>favorite podcasts.</h1>
+        <p>Search episodes, build a knowledge base,<br>and ask anything — powered by AI.</p>
+        <div class="feature-list">
+          <div class="feature-item">
+            <span class="feature-dot"></span>Search any podcast or episode
+          </div>
+          <div class="feature-item">
+            <span class="feature-dot"></span>Auto-transcribe and index content
+          </div>
+          <div class="feature-item">
+            <span class="feature-dot"></span>Ask questions, get cited answers
+          </div>
+        </div>
+      </div>
+
+      <div class="login-card">
+
+        <!-- Sign-in form -->
+        <div id="formState">
+          <p class="card-title">Get started</p>
+          <p class="card-sub">Enter your email — we'll send you a sign-in link, no password needed.</p>
+
+          <div id="errorBanner" class="error-banner hidden">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span id="errorText"></span>
+          </div>
+
+          <form id="loginForm" novalidate>
+            <label for="emailInput">Email address</label>
+            <input id="emailInput" type="email" placeholder="you@example.com" autocomplete="email" required autofocus />
+            <button type="submit" class="btn-primary" id="submitBtn">Send Magic Link</button>
+          </form>
+          <p class="note">Sign up happens automatically on first sign in.</p>
+        </div>
+
+        <!-- Sent confirmation -->
+        <div id="sentState" class="sent-state hidden">
+          <div class="sent-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6 6l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+          </div>
+          <h2>Check your inbox</h2>
+          <p>We sent a sign-in link to <strong id="sentEmail"></strong>. It expires in 15 minutes.</p>
+          <button class="btn-ghost" id="tryAgainBtn">Use a different email</button>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const ERROR_MESSAGES = {
+      missing_token: 'The sign-in link is missing a token. Please request a new one.',
+      invalid_token: 'This sign-in link is invalid or has already been used.',
+      expired_token: 'This sign-in link has expired. Please request a new one.',
+      server_error:  'Something went wrong. Please try again.',
+    };
+
+    const params   = new URLSearchParams(location.search);
+    const errorKey = params.get('error');
+    if (errorKey) showError(ERROR_MESSAGES[errorKey] || 'An error occurred. Please try again.');
+
+    const form       = document.getElementById('loginForm');
+    const emailInput = document.getElementById('emailInput');
+    const submitBtn  = document.getElementById('submitBtn');
+    const formState  = document.getElementById('formState');
+    const sentState  = document.getElementById('sentState');
+    const sentEmail  = document.getElementById('sentEmail');
+    const tryAgain   = document.getElementById('tryAgainBtn');
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const email = emailInput.value.trim();
+      if (!email) return;
+
+      hideError();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending…';
+
+      try {
+        const res  = await fetch('/api/auth/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || 'Failed to send email. Please try again.');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send Magic Link';
+          return;
+        }
+
+        sentEmail.textContent = email;
+        formState.classList.add('hidden');
+        sentState.classList.remove('hidden');
+
+      } catch {
+        showError('Network error. Please check your connection and try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Magic Link';
+      }
+    });
+
+    tryAgain.addEventListener('click', () => {
+      sentState.classList.add('hidden');
+      formState.classList.remove('hidden');
+      emailInput.value = '';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send Magic Link';
+      emailInput.focus();
+    });
+
+    function showError(msg) {
+      document.getElementById('errorBanner').classList.remove('hidden');
+      document.getElementById('errorText').textContent = msg;
+    }
+
+    function hideError() {
+      document.getElementById('errorBanner').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

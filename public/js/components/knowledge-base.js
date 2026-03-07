@@ -3,6 +3,7 @@ import { escHtml } from '../utils.js';
 import { startTranscription } from '../api.js';
 import { redirectIfUnauth } from './auth.js';
 import { renderSearchResults } from './search.js';
+import { loadEpisode } from './player.js';
 
 const kbList     = document.getElementById('kbList');
 const kbBadge    = document.getElementById('kbBadge');
@@ -68,6 +69,7 @@ export async function addEpisode(id) {
     title:      raw?.title                         || 'Loading…',
     podcast:    state.activePodcast?.title         || '',
     thumbnail:  raw?.thumbnail || state.activePodcast?.thumbnail || '',
+    audioUrl:   raw?.audio_url                     || null,
     transcript: null,
     status:     'queued',
   });
@@ -133,6 +135,9 @@ export function renderKb() {
   kbList.innerHTML = state.episodes.map(ep => {
     const cfg = statusConfig[ep.status] || statusConfig.queued;
     const tag = sourceTagMap[ep.status] || '';
+    const listenBtn = ep.audioUrl
+      ? `<button class="listen-btn" data-id="${escHtml(ep.id)}" title="Listen">▶ Listen</button>`
+      : '';
     return `
       <div class="kb-item">
         <img class="kb-thumb" src="${escHtml(ep.thumbnail)}" alt="" onerror="this.style.visibility='hidden'" />
@@ -145,6 +150,7 @@ export function renderKb() {
             ${tag}
           </div>
         </div>
+        ${listenBtn}
         <button class="remove-btn" data-id="${escHtml(ep.id)}" title="Remove">&times;</button>
       </div>
     `;
@@ -156,8 +162,14 @@ export function initKnowledgeBase(options = {}) {
   onEpisodeAdded = options.onEpisodeAdded ?? null;
 
   kbList.addEventListener('click', e => {
-    const btn = e.target.closest('.remove-btn');
-    if (btn) removeEpisode(btn.dataset.id);
+    const removeBtn = e.target.closest('.remove-btn');
+    if (removeBtn) { removeEpisode(removeBtn.dataset.id); return; }
+
+    const listenBtn = e.target.closest('.listen-btn');
+    if (listenBtn) {
+      const ep = state.episodes.find(ep => ep.id === listenBtn.dataset.id);
+      if (ep?.audioUrl) loadEpisode(ep);
+    }
   });
 
   clearKbBtn.addEventListener('click', () => {

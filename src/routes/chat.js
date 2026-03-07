@@ -21,7 +21,11 @@ router.post('/chat', requireAuth, async (req, res) => {
     .join('\n\n---\n\n');
 
   const systemPrompt = knowledgeBase.length > 0
-    ? `You are a helpful assistant that answers questions about podcast episodes. Use the provided transcripts as your primary knowledge source. If the answer isn't in the transcripts, say so and offer general knowledge if appropriate.\n\nTranscripts:\n\n${knowledgeBase}`
+    ? `You are a helpful assistant that answers questions about podcast episodes. Use the provided transcripts as your primary knowledge source. If the answer isn't in the transcripts, say so and offer general knowledge if appropriate.
+
+The transcripts include timestamps at the start of each line in [M:SS] or [H:MM:SS] format. When referring to a specific moment or quote in the audio, always include the exact timestamp from the transcript using that same format (e.g. [4:32] or [1:02:15]). Users can click timestamps in your response to jump directly to that position in the audio player.
+
+Transcripts:\n\n${knowledgeBase}`
     : 'You are a helpful assistant. No podcast transcripts have been loaded yet — ask the user to select and transcribe some episodes first.';
 
   try {
